@@ -1,123 +1,82 @@
-// server.js — FINAL WORKING VERSION (Node 24+, built-in fetch)
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import OpenAI from "openai";
 
-const express = require("express");
-const cors = require("cors");
+dotenv.config();
 
 const app = express();
 
-/* =====================
-   MIDDLEWARE
-===================== */
+/* ===== Middleware ===== */
+app.use(cors());
 app.use(express.json());
 
-app.use(cors({
-  origin: [
-    "http://localhost",
-    "http://localhost:3000",
-    "https://salubriousai.com",
-    "https://www.salubriousai.com"
-  ],
-  methods: ["POST"],
-  allowedHeaders: ["Content-Type"]
-}));
+/* ===== OpenAI Client ===== */
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
-/* =====================
-   ROUTE
-===================== */
+/* ===== Health Check (optional but useful) ===== */
+app.get("/", (req, res) => {
+  res.send("Salubrious AI backend is running ✅");
+});
+
+/* ===== Main Generator Endpoint ===== */
 app.post("/generate-resource", async (req, res) => {
   try {
-    if (!process.env.OPENAI_API_KEY) {
-      return res.status(500).json({
-        error: "OPENAI_API_KEY not set"
-      });
-    }
+    const {
+      grade,
+      subject,
+      resource_type,
+      topic,
+      standard,
+      length,
+    } = req.body;
 
-    const f = req.body || {};
+    if (!grade || !subject || !resource_type || !topic) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
 
     const prompt = `
-You are an experienced classroom teacher and curriculum designer.
+Create a ${resource_type} for a ${grade} ${subject} class.
 
-Grade: ${f.grade || ""}
-Subject: ${f.subject || ""}
-Resource Type: ${f.resource_type || ""}
-Topic: ${f.topic || ""}
-Standard: ${f.standard || ""}
-Length: ${f.length || ""}
+Topic: ${topic}
+Standard: ${standard || "Not specified"}
+Length: ${length || "Standard"}
 
-Generate:
-1) Student-facing worksheet
-2) Teacher answer key
+Return TWO sections:
+1. Student worksheet
+2. Teacher answer key
 
-Rules:
-- Classroom-safe language
-- No emojis
-- Clear formatting
-- Label the answer key EXACTLY as: ANSWER KEY:
+Format clearly with headings.
 `;
 
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "gpt-4.1-mini",
-        input: prompt
-      })
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: "You are an expert curriculum designer." },
+        { role: "user", content: prompt },
+      ],
     });
 
-    const data = await response.json();
+    const text = completion.choices[0].message.content;
 
-    if (!response.ok) {
-      return res.status(500).json({
-        error: "OpenAI API error",
-        details: data
-      });
-    }
-
-    // ✅ Correct Responses API text extraction
-    let text = "";
-
-    if (Array.isArray(data.output)) {
-      for (const item of data.output) {
-        if (Array.isArray(item.content)) {
-          for (const c of item.content) {
-            if (c.type === "output_text") {
-              text += c.text;
-            }
-          }
-        }
-      }
-    }
-
-    if (!text) {
-      return res.status(500).json({
-        error: "No text returned from OpenAI",
-        raw: data
-      });
-    }
-
-    const parts = text.split("ANSWER KEY:");
+    // Simple split (you can improve later)
+    const [worksheet, answer_key] = text.split(/Answer Key:/i);
 
     res.json({
-      worksheet: (parts[0] || "").trim(),
-      answer_key: (parts[1] || "").trim()
+      worksheet: worksheet?.trim() || text,
+      answer_key: answer_key?.trim() || "Answer key not generated.",
     });
-
-  } catch (err) {
-    console.error("SERVER ERROR:", err);
-    res.status(500).json({
-      error: "Generation failed",
-      details: String(err)
-    });
+  } catch (error) {
+    console.error("❌ Generation error:", error);
+    res.status(500).json({ error: "Generation failed" });
   }
 });
 
-/* =====================
-   START SERVER
-===================== */
-const PORT = 3000;
+/* ===== ✅ REQUIRED Render Port Binding ===== */
+const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
   console.log(`AI Generator running on port ${PORT}`);
 });
