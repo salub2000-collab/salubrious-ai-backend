@@ -1,7 +1,6 @@
 {
   "name": "salubrious-ai-backend",
   "version": "1.0.0",
-  "description": "Backend API for Salubrious AI",
   "type": "module",
   "main": "server.js",
   "scripts": {
