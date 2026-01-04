@@ -1,43 +1,90 @@
-// imports at top
 import express from "express";
-import dotenv from "dotenv";
+import fetch from "node-fetch";
 import cors from "cors";
-import rateLimit from "express-rate-limit";
-import OpenAI from "openai";
-
-dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 10000;
 
-// =====================
-// EXISTING MIDDLEWARE
-// =====================
 app.use(cors());
 app.use(express.json());
 
-// ✅ PASTE THIS RIGHT HERE
-app.use((req, res, next) => {
-  console.log(`${req.method} ${req.path}`);
-  next();
-});
-
-// =====================
-// ROUTES
-// =====================
 app.get("/", (req, res) => {
   res.send("AI Generator running...");
 });
 
-app.post(
-  "/generate",
-  generateLimiter,
-  requireApiKey,
-  async (req, res) => {
-    // existing generate logic
-  }
-);
+app.post("/generate", async (req, res) => {
+  try {
+    console.log("REQUEST BODY:", req.body);
 
+    const {
+      grade,
+      resource_type,
+      subject,
+      topic,
+      standard,
+      length,
+      scope,
+      output_type
+    } = req.body || {};
+
+    const prompt = `
+Create a ${resource_type} for grade ${grade} students.
+
+Subject: ${subject}
+Topic: ${topic}
+Standard: ${standard || "N/A"}
+Length: ${length || "N/A"}
+Scope: ${scope || "N/A"}
+Output Type: ${output_type || "N/A"}
+
+Make it classroom-ready, clear, and teacher-friendly.
+`.trim();
+
+    if (!prompt || prompt.length < 10) {
+      return res.status(400).json({ error: "Prompt is required" });
+    }
+
+    console.log("PROMPT SENT TO OPENAI:", prompt);
+
+    const openaiResponse = await fetch(
+      "https://api.openai.com/v1/responses",
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "gpt-4.1-mini",
+          input: prompt
+        })
+      }
+    );
+
+    const data = await openaiResponse.json();
+
+    console.log("OPENAI RAW RESPONSE:", data);
+
+    const output =
+      data.output?.[0]?.content?.[0]?.text ||
+      data.output_text ||
+      null;
+
+    if (!output) {
+      return res.status(500).json({
+        error: "OpenAI returned no usable output",
+        raw: data
+      });
+    }
+
+    res.json({ output });
+
+  } catch (err) {
+    console.error("SERVER ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`AI Generator running on port ${PORT}`);
 });
