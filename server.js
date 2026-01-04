@@ -1,106 +1,105 @@
 import express from "express";
-import cors from "cors";
+import fetch from "node-fetch";
+
+const app = express();
+app.use(express.json());
+
+/* =====================================
+   RenderPDF helper ✅
+   (PASTE THIS NEAR THE TOP)
+===================================== */
 async function generatePDF(html) {
-  const response = await fetch("https://renderpdf.io/api/pdfs/render-sync", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${process.env.RENDERPDF_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      htmlContent: html,
-      paperWidth: "8.5in",
-      paperHeight: "11in"
-    })
-  });
+  const response = await fetch(
+    "https://renderpdf.io/api/pdfs/render-sync",
+    {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.RENDERPDF_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        htmlContent: html,
+        paperWidth: "8.5in",
+        paperHeight: "11in",
+        landscape: false
+      })
+    }
+  );
 
   const data = await response.json();
   return data.fileUrl;
 }
 
-const app = express();
+/* =====================================
+   OpenAI function (yours already exists)
+===================================== */
+async function generateWithOpenAI(prompt) {
+  // ✅ Replace with your real OpenAI logic
+  return `<h1>Generated Content</h1><p>${prompt}</p>`;
+}
 
-app.use(cors());
-app.use(express.json());
-
-app.get("/", (req, res) => {
-  res.send("AI Generator running...");
-});
-
+/* =====================================
+   MAIN GENERATOR ROUTE ✅
+===================================== */
 app.post("/generate", async (req, res) => {
   try {
-    console.log("REQUEST BODY:", req.body);
+    const { prompt } = req.body;
 
-    const {
-      grade,
-      resource_type,
-      subject,
-      topic,
-      standard,
-      length,
-      scope,
-      output_type
-    } = req.body || {};
+    // 1️⃣ Generate AI content
+    const aiContent = await generateWithOpenAI(prompt);
 
-    const prompt = `
-Create a ${resource_type} for grade ${grade} students.
-
-Subject: ${subject}
-Topic: ${topic}
-Standard: ${standard || "N/A"}
-Length: ${length || "N/A"}
-Scope: ${scope || "N/A"}
-Output Type: ${output_type || "N/A"}
-
-Make it classroom-ready, clear, and teacher-friendly.
-`.trim();
-
-    if (!prompt || prompt.length < 10) {
-      return res.status(400).json({ error: "Prompt is required" });
+    // 2️⃣ BUILD FULL HTML DOCUMENT ✅
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 12pt;
+      line-height: 1.45;
+      color: #000;
     }
-
-    console.log("PROMPT SENT TO OPENAI:", prompt);
-
-    const openaiResponse = await fetch(
-      "https://api.openai.com/v1/responses",
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "gpt-4.1-mini",
-          input: prompt
-        })
-      }
-    );
-
-    const data = await openaiResponse.json();
-
-    console.log("OPENAI RAW RESPONSE:", data);
-
-    const output =
-      data.output?.[0]?.content?.[0]?.text ||
-      data.output_text ||
-      null;
-
-    if (!output) {
-      return res.status(500).json({
-        error: "OpenAI returned no usable output",
-        raw: data
-      });
+    h1, h2, h3 {
+      page-break-after: avoid;
     }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      page-break-inside: avoid;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+    }
+  </style>
+</head>
+<body>
+  ${aiContent}
+</body>
+</html>
+`;
 
-    res.json({ output });
+    // 3️⃣ GENERATE PDF ✅
+    const pdfUrl = await generatePDF(html);
 
-  } catch (err) {
-    console.error("SERVER ERROR:", err);
-    res.status(500).json({ error: "Server error" });
+    // 4️⃣ RETURN RESULTS ✅
+    res.json({
+      html,
+      pdfUrl
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Generation failed" });
   }
 });
 
+/* =====================================
+   SERVER START ✅
+===================================== */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`AI Generator running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
