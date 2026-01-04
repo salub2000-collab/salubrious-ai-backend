@@ -1,5 +1,22 @@
 import express from "express";
 import cors from "cors";
+async function generatePDF(html) {
+  const response = await fetch("https://renderpdf.io/api/pdfs/render-sync", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${process.env.RENDERPDF_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      htmlContent: html,
+      paperWidth: "8.5in",
+      paperHeight: "11in"
+    })
+  });
+
+  const data = await response.json();
+  return data.fileUrl;
+}
 
 const app = express();
 
