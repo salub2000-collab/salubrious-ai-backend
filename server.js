@@ -1,13 +1,13 @@
-import express from "express";
-import fetch from "node-fetch";
-import sqlite3 from "sqlite3";
-import { open } from "sqlite";
+const express = require("express");
+const fetch = require("node-fetch");
+const sqlite3 = require("sqlite3");
+const { open } = require("sqlite");
 
 const app = express();
 app.use(express.json());
 
 /* =====================================
-   DATABASE INIT (RENDER SAFE ✅)
+   DATABASE INIT (COMMONJS + RENDER SAFE ✅)
 ===================================== */
 let db;
 
@@ -72,7 +72,6 @@ app.post("/generate", async (req, res) => {
       return res.status(400).json({ error: "EMAIL_REQUIRED" });
     }
 
-    // ✅ Look up usage
     const user = await db.get(
       "SELECT * FROM usage WHERE email = ?",
       email
@@ -96,10 +95,8 @@ app.post("/generate", async (req, res) => {
       );
     }
 
-    // ✅ Generate AI content
     const aiContent = await generateWithOpenAI(prompt);
 
-    // ✅ Build HTML
     const html = `
 <!DOCTYPE html>
 <html>
@@ -130,10 +127,8 @@ app.post("/generate", async (req, res) => {
 </html>
 `;
 
-    // ✅ Generate PDF
     const pdfUrl = await generatePDF(html);
 
-    // ✅ Final response
     res.json({
       html,
       pdfUrl
