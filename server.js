@@ -30,10 +30,17 @@ async function initDb() {
 }
 
 /* =====================================
-   HEALTH CHECK ✅ (REQUIRED FOR RENDER)
+   HEALTH CHECK ✅ (RENDER REQUIRED)
 ===================================== */
 app.get("/", (req, res) => {
   res.status(200).send("OK");
+});
+
+/* =====================================
+   VERSION CHECK ✅ (DEPLOY VERIFICATION)
+===================================== */
+app.get("/version", (req, res) => {
+  res.send("DEPLOYED VERSION: 3-FREE-LIMIT + JSON LOGIN ACTIVE");
 });
 
 /* =====================================
@@ -83,26 +90,30 @@ app.post("/generate", async (req, res) => {
       return res.status(400).json({ error: "EMAIL_REQUIRED" });
     }
 
-    const user = await db.get(
+    let user = await db.get(
       "SELECT * FROM usage WHERE email = ?",
       email
     );
 
+    // First-time user
     if (!user) {
       await db.run(
-        "INSERT INTO usage (email, count, paid) VALUES (?, 1, 0)",
+        "INSERT INTO usage (email, count, paid) VALUES (?, 0, 0)",
         email
       );
-    } else {
-      if (!user.paid && user.count >= 5) {
-        return res.status(402).json({ error: "FREE_LIMIT_REACHED" });
-      }
-
-      await db.run(
-        "UPDATE usage SET count = count + 1 WHERE email = ?",
-        email
-      );
+      user = { count: 0, paid: 0 };
     }
+
+    // Enforce free limit
+    if (!user.paid && user.count >= 3) {
+      return res.status(402).json({ error: "FREE_LIMIT_REACHED" });
+    }
+
+    // Increment usage
+    await db.run(
+      "UPDATE usage SET count = count + 1 WHERE email = ?",
+      email
+    );
 
     const aiContent = await generateWithOpenAI(prompt);
 
@@ -131,14 +142,14 @@ app.post("/generate", async (req, res) => {
 });
 
 /* =====================================
-   EMAIL GENERATOR LOGIN ✅
+   EMAIL GENERATOR LOGIN ✅ (JSON ONLY)
 ===================================== */
 app.post("/email-login", async (req, res) => {
   try {
     const { email } = req.body;
 
     if (!email) {
-      return res.redirect("https://salubriousai.com/email-login-generator/");
+      return res.json({ redirect: "/email-login-generator/" });
     }
 
     let user = await db.get(
@@ -146,27 +157,31 @@ app.post("/email-login", async (req, res) => {
       email
     );
 
+    // New user
     if (!user) {
       await db.run(
         "INSERT INTO usage (email, count, paid) VALUES (?, 0, 0)",
         email
       );
-      return res.redirect("https://salubriousai.com/generator");
+      return res.json({ redirect: "/generator" });
     }
 
+    // Paid user
     if (user.paid === 1) {
-      return res.redirect("https://salubriousai.com/generator");
+      return res.json({ redirect: "/generator" });
     }
 
-  if (user.count < 3) {
-  return res.redirect("https://salubriousai.com/generator");
-}
+    // Free user under limit
+    if (user.count < 3) {
+      return res.json({ redirect: "/generator" });
+    }
 
-    return res.redirect("https://salubriousai.com/used");
+    // Free limit reached
+    return res.json({ redirect: "/used" });
 
   } catch (err) {
     console.error("❌ Email login error:", err);
-    return res.redirect("https://salubriousai.com/used");
+    return res.json({ redirect: "/used" });
   }
 });
 
