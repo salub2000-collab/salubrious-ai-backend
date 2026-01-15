@@ -60,7 +60,7 @@ async function generatePDF(html) {
    OPENAI GENERATOR (PLACEHOLDER)
 ===================================== */
 async function generateWithOpenAI(prompt) {
-  // 🔁 Replace this with your real OpenAI logic
+  // 🔁 Replace with your real OpenAI logic
   return `<h1>Generated Content</h1><p>${prompt}</p>`;
 }
 
@@ -75,27 +75,24 @@ app.post("/generate", async (req, res) => {
       return res.status(400).json({ error: "EMAIL_REQUIRED" });
     }
 
-    // 🔍 Look up user usage
+    // 🔍 Look up usage
     const user = await db.get(
       "SELECT * FROM usage WHERE email = ?",
       email
     );
 
     if (!user) {
-      // 🆕 First‑time user
       await db.run(
         "INSERT INTO usage (email, count, paid) VALUES (?, 1, 0)",
         email
       );
     } else {
-      // 🚫 Free limit reached
       if (!user.paid && user.count >= 5) {
         return res.status(402).json({
           error: "FREE_LIMIT_REACHED"
         });
       }
 
-      // ➕ Increment usage
       await db.run(
         "UPDATE usage SET count = count + 1 WHERE email = ?",
         email
@@ -105,7 +102,7 @@ app.post("/generate", async (req, res) => {
     // 🤖 Generate AI content
     const aiContent = await generateWithOpenAI(prompt);
 
-    // 📄 Build printable HTML
+    // 📄 Build HTML
     const html = `
 <!DOCTYPE html>
 <html>
@@ -141,7 +138,6 @@ app.post("/generate", async (req, res) => {
     // 📎 Generate PDF
     const pdfUrl = await generatePDF(html);
 
-    // ✅ Final response
     res.json({
       html,
       pdfUrl
@@ -154,7 +150,7 @@ app.post("/generate", async (req, res) => {
 });
 
 /* =====================================
-   SERVER BOOTSTRAP ✅ (CRITICAL)
+   SERVER BOOTSTRAP ✅
 ===================================== */
 const PORT = process.env.PORT || 3000;
 
