@@ -158,9 +158,9 @@ app.post("/email-login", async (req, res) => {
       return res.redirect("https://salubriousai.com/generator");
     }
 
-    if (user.count < 5) {
-      return res.redirect("https://salubriousai.com/generator");
-    }
+  if (user.count < 3) {
+  return res.redirect("https://salubriousai.com/generator");
+}
 
     return res.redirect("https://salubriousai.com/used");
 
