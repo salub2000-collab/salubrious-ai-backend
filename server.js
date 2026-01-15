@@ -37,7 +37,7 @@ async function generatePDF(html) {
     {
       method: "POST",
       headers: {
-        Authorization: \`Bearer \${process.env.RENDERPDF_API_KEY}\`,
+      Authorization: `Bearer ${process.env.RENDERPDF_API_KEY}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
