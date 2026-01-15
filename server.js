@@ -60,7 +60,49 @@ async function generateWithOpenAI(prompt) {
 ===================================== */
 app.post("/generate", async (req, res) => {
   try {
-    const { prompt } = req.body;
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: "EMAIL_REQUIRED" });
+    }
+
+    // Look up user
+    let user = await db.get(
+      "SELECT * FROM usage WHERE email = ?",
+      email
+    );
+
+    // New user
+    if (!user) {
+      await db.run(
+        "INSERT INTO usage (email, count, paid) VALUES (?, 1, 0)",
+        email
+      );
+    } else {
+      // Free limit reached
+      if (!user.paid && user.count >= 5) {
+        return res
+          .status(402)
+          .json({ error: "FREE_LIMIT_REACHED" });
+      }
+
+      // Increment usage
+      await db.run(
+        "UPDATE usage SET count = count + 1 WHERE email = ?",
+        email
+      );
+    }
+
+    // ✅ ONLY NOW generate content
+    const result = await generateWorksheet(req.body);
+
+    res.json({ output: result });
+
+  } catch (err) {
+    console.error("Generate error:", err);
+    res.status(500).json({ error: "SERVER_ERROR" });
+  }
+});
 
     // 1️⃣ Generate AI content
     const aiContent = await generateWithOpenAI(prompt);
