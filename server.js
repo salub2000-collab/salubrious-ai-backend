@@ -8,11 +8,11 @@ app.use(express.json());
 let db;
 
 /* =====================================
-   DATABASE INIT ✅ (ESM SAFE)
+   DATABASE INITIALIZATION ✅
 ===================================== */
 async function initDb() {
   db = await open({
-    filename: "/var/data/usage.db", // ✅ persistent disk
+    filename: "/var/data/usage.db", // ✅ Render persistent disk
     driver: sqlite3.Database
   });
 
@@ -28,7 +28,7 @@ async function initDb() {
 }
 
 /* =====================================
-   RenderPDF helper ✅
+   PDF GENERATION (Node 18+ fetch ✅)
 ===================================== */
 async function generatePDF(html) {
   const response = await fetch(
@@ -48,20 +48,24 @@ async function generatePDF(html) {
     }
   );
 
+  if (!response.ok) {
+    throw new Error("PDF generation failed");
+  }
+
   const data = await response.json();
   return data.fileUrl;
 }
 
 /* =====================================
-   OpenAI generator (KEEP YOUR REAL LOGIC)
+   OPENAI GENERATOR (PLACEHOLDER)
 ===================================== */
 async function generateWithOpenAI(prompt) {
-  // ✅ Replace with your real OpenAI logic
+  // 🔁 Replace this with your real OpenAI logic
   return `<h1>Generated Content</h1><p>${prompt}</p>`;
 }
 
 /* =====================================
-   MAIN GENERATOR ROUTE ✅
+   MAIN GENERATION ENDPOINT ✅
 ===================================== */
 app.post("/generate", async (req, res) => {
   try {
@@ -71,33 +75,37 @@ app.post("/generate", async (req, res) => {
       return res.status(400).json({ error: "EMAIL_REQUIRED" });
     }
 
-    // ✅ Check usage
+    // 🔍 Look up user usage
     const user = await db.get(
       "SELECT * FROM usage WHERE email = ?",
       email
     );
 
     if (!user) {
+      // 🆕 First‑time user
       await db.run(
         "INSERT INTO usage (email, count, paid) VALUES (?, 1, 0)",
         email
       );
     } else {
+      // 🚫 Free limit reached
       if (!user.paid && user.count >= 5) {
         return res.status(402).json({
           error: "FREE_LIMIT_REACHED"
         });
       }
 
+      // ➕ Increment usage
       await db.run(
         "UPDATE usage SET count = count + 1 WHERE email = ?",
         email
       );
     }
 
-    // ✅ Generate content
+    // 🤖 Generate AI content
     const aiContent = await generateWithOpenAI(prompt);
 
+    // 📄 Build printable HTML
     const html = `
 <!DOCTYPE html>
 <html>
@@ -108,6 +116,7 @@ app.post("/generate", async (req, res) => {
       font-family: Arial, sans-serif;
       font-size: 12pt;
       line-height: 1.45;
+      color: #000;
     }
     h1, h2, h3 {
       page-break-after: avoid;
@@ -115,6 +124,7 @@ app.post("/generate", async (req, res) => {
     table {
       width: 100%;
       border-collapse: collapse;
+      page-break-inside: avoid;
     }
     th, td {
       border: 1px solid #ccc;
@@ -128,8 +138,10 @@ app.post("/generate", async (req, res) => {
 </html>
 `;
 
+    // 📎 Generate PDF
     const pdfUrl = await generatePDF(html);
 
+    // ✅ Final response
     res.json({
       html,
       pdfUrl
@@ -153,7 +165,7 @@ async function startServer() {
       console.log(`✅ Server running on port ${PORT}`);
     });
   } catch (err) {
-    console.error("❌ Startup failed", err);
+    console.error("❌ Startup failed:", err);
     process.exit(1);
   }
 }
