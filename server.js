@@ -1,6 +1,7 @@
-import express from "express";
-import sqlite3 from "sqlite3";
-import { open } from "sqlite";
+const express = require("express");
+const sqlite3 = require("sqlite3");
+const { open } = require("sqlite");
+const fetch = require("node-fetch");
 
 const app = express();
 app.use(express.json());
@@ -13,7 +14,7 @@ let db;
 ===================================== */
 async function initDb() {
   db = await open({
-    filename: "/var/data/usage.db", // ✅ Render persistent disk
+    filename: "/var/data/usage.db",
     driver: sqlite3.Database
   });
 
@@ -29,6 +30,13 @@ async function initDb() {
 }
 
 /* =====================================
+   HEALTH CHECK ✅ (REQUIRED FOR RENDER)
+===================================== */
+app.get("/", (req, res) => {
+  res.status(200).send("OK");
+});
+
+/* =====================================
    PDF GENERATION ✅
 ===================================== */
 async function generatePDF(html) {
@@ -37,7 +45,7 @@ async function generatePDF(html) {
     {
       method: "POST",
       headers: {
-      Authorization: `Bearer ${process.env.RENDERPDF_API_KEY}`,
+        Authorization: `Bearer ${process.env.RENDERPDF_API_KEY}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
@@ -87,9 +95,7 @@ app.post("/generate", async (req, res) => {
       );
     } else {
       if (!user.paid && user.count >= 5) {
-        return res.status(402).json({
-          error: "FREE_LIMIT_REACHED"
-        });
+        return res.status(402).json({ error: "FREE_LIMIT_REACHED" });
       }
 
       await db.run(
@@ -116,7 +122,6 @@ app.post("/generate", async (req, res) => {
 `;
 
     const pdfUrl = await generatePDF(html);
-
     res.json({ html, pdfUrl });
 
   } catch (err) {
@@ -141,30 +146,22 @@ app.post("/email-login", async (req, res) => {
       email
     );
 
-    // ✅ First-time email
     if (!user) {
       await db.run(
         "INSERT INTO usage (email, count, paid) VALUES (?, 0, 0)",
         email
       );
-
-      res.cookie("salai_email", email, { path: "/" });
       return res.redirect("https://salubriousai.com/generator");
     }
 
-    // ✅ PAID USERS ALWAYS ALLOWED
     if (user.paid === 1) {
-      res.cookie("salai_email", email, { path: "/" });
       return res.redirect("https://salubriousai.com/generator");
     }
 
-    // ✅ FREE USERS WITH USES LEFT
     if (user.count < 5) {
-      res.cookie("salai_email", email, { path: "/" });
       return res.redirect("https://salubriousai.com/generator");
     }
 
-    // ❌ FREE LIMIT REACHED
     return res.redirect("https://salubriousai.com/used");
 
   } catch (err) {
@@ -214,16 +211,14 @@ app.post("/activate-paid", async (req, res) => {
 ===================================== */
 const PORT = process.env.PORT || 3000;
 
-async function startServer() {
+(async () => {
   try {
     await initDb();
-    app.listen(PORT, () => {
+    app.listen(PORT, "0.0.0.0", () => {
       console.log(`✅ Server running on port ${PORT}`);
     });
   } catch (err) {
     console.error("❌ Startup failed:", err);
     process.exit(1);
   }
-}
-
-startServer();
+})();
