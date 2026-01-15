@@ -1,3 +1,20 @@
+import sqlite3 from "sqlite3";
+import { open } from "sqlite";
+
+// Open database
+const db = await open({
+  filename: "./usage.db",
+  driver: sqlite3.Database
+});
+
+// Create table if it doesn't exist
+await db.exec(`
+  CREATE TABLE IF NOT EXISTS usage (
+    email TEXT PRIMARY KEY,
+    count INTEGER DEFAULT 0,
+    paid INTEGER DEFAULT 0
+  );
+`);
 import express from "express";
 import fetch from "node-fetch";
 
