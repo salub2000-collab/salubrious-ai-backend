@@ -4,6 +4,7 @@ import { open } from "sqlite";
 
 const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 let db;
 
@@ -28,7 +29,7 @@ async function initDb() {
 }
 
 /* =====================================
-   PDF GENERATION (Node 18+ fetch ✅)
+   PDF GENERATION ✅
 ===================================== */
 async function generatePDF(html) {
   const response = await fetch(
@@ -36,7 +37,7 @@ async function generatePDF(html) {
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.RENDERPDF_API_KEY}`,
+        Authorization: \`Bearer \${process.env.RENDERPDF_API_KEY}\`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
@@ -60,7 +61,6 @@ async function generatePDF(html) {
    OPENAI GENERATOR (PLACEHOLDER)
 ===================================== */
 async function generateWithOpenAI(prompt) {
-  // 🔁 Replace with your real OpenAI logic
   return `<h1>Generated Content</h1><p>${prompt}</p>`;
 }
 
@@ -75,7 +75,6 @@ app.post("/generate", async (req, res) => {
       return res.status(400).json({ error: "EMAIL_REQUIRED" });
     }
 
-    // 🔍 Look up usage
     const user = await db.get(
       "SELECT * FROM usage WHERE email = ?",
       email
@@ -99,34 +98,15 @@ app.post("/generate", async (req, res) => {
       );
     }
 
-    // 🤖 Generate AI content
     const aiContent = await generateWithOpenAI(prompt);
 
-    // 📄 Build HTML
     const html = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      font-size: 12pt;
-      line-height: 1.45;
-      color: #000;
-    }
-    h1, h2, h3 {
-      page-break-after: avoid;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      page-break-inside: avoid;
-    }
-    th, td {
-      border: 1px solid #ccc;
-      padding: 8px;
-    }
+    body { font-family: Arial, sans-serif; font-size: 12pt; }
   </style>
 </head>
 <body>
@@ -135,16 +115,96 @@ app.post("/generate", async (req, res) => {
 </html>
 `;
 
-    // 📎 Generate PDF
     const pdfUrl = await generatePDF(html);
 
-    res.json({
-      html,
-      pdfUrl
-    });
+    res.json({ html, pdfUrl });
 
   } catch (err) {
     console.error("❌ Generate error:", err);
+    res.status(500).json({ error: "SERVER_ERROR" });
+  }
+});
+
+/* =====================================
+   EMAIL GENERATOR LOGIN ✅
+===================================== */
+app.post("/email-login", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.redirect("https://salubriousai.com/email-login-generator/");
+    }
+
+    let user = await db.get(
+      "SELECT * FROM usage WHERE email = ?",
+      email
+    );
+
+    // ✅ First-time email
+    if (!user) {
+      await db.run(
+        "INSERT INTO usage (email, count, paid) VALUES (?, 0, 0)",
+        email
+      );
+
+      res.cookie("salai_email", email, { path: "/" });
+      return res.redirect("https://salubriousai.com/generator");
+    }
+
+    // ✅ PAID USERS ALWAYS ALLOWED
+    if (user.paid === 1) {
+      res.cookie("salai_email", email, { path: "/" });
+      return res.redirect("https://salubriousai.com/generator");
+    }
+
+    // ✅ FREE USERS WITH USES LEFT
+    if (user.count < 5) {
+      res.cookie("salai_email", email, { path: "/" });
+      return res.redirect("https://salubriousai.com/generator");
+    }
+
+    // ❌ FREE LIMIT REACHED
+    return res.redirect("https://salubriousai.com/used");
+
+  } catch (err) {
+    console.error("❌ Email login error:", err);
+    return res.redirect("https://salubriousai.com/used");
+  }
+});
+
+/* =====================================
+   ACTIVATE PAID USER ✅
+===================================== */
+app.post("/activate-paid", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: "EMAIL_REQUIRED" });
+    }
+
+    const user = await db.get(
+      "SELECT * FROM usage WHERE email = ?",
+      email
+    );
+
+    if (!user) {
+      await db.run(
+        "INSERT INTO usage (email, count, paid) VALUES (?, 0, 1)",
+        email
+      );
+    } else {
+      await db.run(
+        "UPDATE usage SET paid = 1 WHERE email = ?",
+        email
+      );
+    }
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("❌ Activate paid error:", err);
     res.status(500).json({ error: "SERVER_ERROR" });
   }
 });
