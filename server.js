@@ -1,5 +1,4 @@
 import express from "express";
-import fetch from "node-fetch";
 import sqlite3 from "sqlite3";
 import { open } from "sqlite";
 
