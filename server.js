@@ -1,29 +1,35 @@
-import sqlite3 from "sqlite3";
-import { open } from "sqlite";
-
-// Open database
-const db = await open({
-  filename: "./usage.db",
-  driver: sqlite3.Database
-});
-
-// Create table if it doesn't exist
-await db.exec(`
-  CREATE TABLE IF NOT EXISTS usage (
-    email TEXT PRIMARY KEY,
-    count INTEGER DEFAULT 0,
-    paid INTEGER DEFAULT 0
-  );
-`);
 import express from "express";
 import fetch from "node-fetch";
+import sqlite3 from "sqlite3";
+import { open } from "sqlite";
 
 const app = express();
 app.use(express.json());
 
 /* =====================================
+   DATABASE INIT (RENDER SAFE ✅)
+===================================== */
+let db;
+
+async function initDb() {
+  db = await open({
+    filename: "/var/data/usage.db", // ✅ persistent disk path
+    driver: sqlite3.Database
+  });
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS usage (
+      email TEXT PRIMARY KEY,
+      count INTEGER DEFAULT 0,
+      paid INTEGER DEFAULT 0
+    );
+  `);
+
+  console.log("✅ Database initialized");
+}
+
+/* =====================================
    RenderPDF helper ✅
-   (PASTE THIS NEAR THE TOP)
 ===================================== */
 async function generatePDF(html) {
   const response = await fetch(
@@ -31,7 +37,7 @@ async function generatePDF(html) {
     {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${process.env.RENDERPDF_API_KEY}`,
+        Authorization: `Bearer ${process.env.RENDERPDF_API_KEY}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
@@ -48,7 +54,7 @@ async function generatePDF(html) {
 }
 
 /* =====================================
-   OpenAI function (yours already exists)
+   OpenAI generator (KEEP YOUR REAL LOGIC)
 ===================================== */
 async function generateWithOpenAI(prompt) {
   // ✅ Replace with your real OpenAI logic
@@ -60,54 +66,40 @@ async function generateWithOpenAI(prompt) {
 ===================================== */
 app.post("/generate", async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, prompt } = req.body;
 
     if (!email) {
       return res.status(400).json({ error: "EMAIL_REQUIRED" });
     }
 
-    // Look up user
-    let user = await db.get(
+    // ✅ Look up usage
+    const user = await db.get(
       "SELECT * FROM usage WHERE email = ?",
       email
     );
 
-    // New user
     if (!user) {
       await db.run(
         "INSERT INTO usage (email, count, paid) VALUES (?, 1, 0)",
         email
       );
     } else {
-      // Free limit reached
       if (!user.paid && user.count >= 5) {
-        return res
-          .status(402)
-          .json({ error: "FREE_LIMIT_REACHED" });
+        return res.status(402).json({
+          error: "FREE_LIMIT_REACHED"
+        });
       }
 
-      // Increment usage
       await db.run(
         "UPDATE usage SET count = count + 1 WHERE email = ?",
         email
       );
     }
 
-    // ✅ ONLY NOW generate content
-    const result = await generateWorksheet(req.body);
-
-    res.json({ output: result });
-
-  } catch (err) {
-    console.error("Generate error:", err);
-    res.status(500).json({ error: "SERVER_ERROR" });
-  }
-});
-
-    // 1️⃣ Generate AI content
+    // ✅ Generate AI content
     const aiContent = await generateWithOpenAI(prompt);
 
-    // 2️⃣ BUILD FULL HTML DOCUMENT ✅
+    // ✅ Build HTML
     const html = `
 <!DOCTYPE html>
 <html>
@@ -118,7 +110,6 @@ app.post("/generate", async (req, res) => {
       font-family: Arial, sans-serif;
       font-size: 12pt;
       line-height: 1.45;
-      color: #000;
     }
     h1, h2, h3 {
       page-break-after: avoid;
@@ -126,7 +117,6 @@ app.post("/generate", async (req, res) => {
     table {
       width: 100%;
       border-collapse: collapse;
-      page-break-inside: avoid;
     }
     th, td {
       border: 1px solid #ccc;
@@ -140,18 +130,18 @@ app.post("/generate", async (req, res) => {
 </html>
 `;
 
-    // 3️⃣ GENERATE PDF ✅
+    // ✅ Generate PDF
     const pdfUrl = await generatePDF(html);
 
-    // 4️⃣ RETURN RESULTS ✅
+    // ✅ Final response
     res.json({
       html,
       pdfUrl
     });
 
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Generation failed" });
+  } catch (err) {
+    console.error("❌ Generate error:", err);
+    res.status(500).json({ error: "SERVER_ERROR" });
   }
 });
 
@@ -159,6 +149,14 @@ app.post("/generate", async (req, res) => {
    SERVER START ✅
 ===================================== */
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+
+initDb()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`✅ Server running on port ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("❌ DB init failed", err);
+    process.exit(1);
+  });
