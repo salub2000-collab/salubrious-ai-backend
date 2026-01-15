@@ -1,19 +1,19 @@
-const express = require("express");
-const fetch = require("node-fetch");
-const sqlite3 = require("sqlite3");
-const { open } = require("sqlite");
+import express from "express";
+import fetch from "node-fetch";
+import sqlite3 from "sqlite3";
+import { open } from "sqlite";
 
 const app = express();
 app.use(express.json());
 
-/* =====================================
-   DATABASE INIT (COMMONJS + RENDER SAFE ✅)
-===================================== */
 let db;
 
+/* =====================================
+   DATABASE INIT ✅ (ESM SAFE)
+===================================== */
 async function initDb() {
   db = await open({
-    filename: "/var/data/usage.db", // ✅ persistent disk path
+    filename: "/var/data/usage.db", // ✅ persistent disk
     driver: sqlite3.Database
   });
 
@@ -72,6 +72,7 @@ app.post("/generate", async (req, res) => {
       return res.status(400).json({ error: "EMAIL_REQUIRED" });
     }
 
+    // ✅ Check usage
     const user = await db.get(
       "SELECT * FROM usage WHERE email = ?",
       email
@@ -95,6 +96,7 @@ app.post("/generate", async (req, res) => {
       );
     }
 
+    // ✅ Generate content
     const aiContent = await generateWithOpenAI(prompt);
 
     const html = `
@@ -141,17 +143,20 @@ app.post("/generate", async (req, res) => {
 });
 
 /* =====================================
-   SERVER START ✅
+   SERVER BOOTSTRAP ✅ (CRITICAL)
 ===================================== */
 const PORT = process.env.PORT || 3000;
 
-initDb()
-  .then(() => {
+async function startServer() {
+  try {
+    await initDb();
     app.listen(PORT, () => {
       console.log(`✅ Server running on port ${PORT}`);
     });
-  })
-  .catch((err) => {
-    console.error("❌ DB init failed", err);
+  } catch (err) {
+    console.error("❌ Startup failed", err);
     process.exit(1);
-  });
+  }
+}
+
+startServer();
