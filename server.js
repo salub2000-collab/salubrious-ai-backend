@@ -4,6 +4,7 @@ const { open } = require("sqlite");
 const fetch = require("node-fetch");
 const cors = require("cors");
 
+// This was the missing part causing the "express is not defined" error
 const app = express();
 
 // Middleware
@@ -17,7 +18,6 @@ let db;
     DATABASE INITIALIZATION ✅
 ===================================== */
 async function initDb() {
-  // Using ./usage.db ensures it creates the file in your current directory
   db = await open({
     filename: "./usage.db",
     driver: sqlite3.Database
@@ -35,7 +35,7 @@ async function initDb() {
 }
 
 /* =====================================
-    HEALTH CHECK ✅ (RENDER REQUIRED)
+    HEALTH CHECK ✅
 ===================================== */
 app.get("/", (req, res) => {
   res.status(200).send("OK");
@@ -83,7 +83,6 @@ async function generatePDF(html) {
     OPENAI GENERATOR (PLACEHOLDER)
 ===================================== */
 async function generateWithOpenAI(prompt) {
-  // Logic for OpenAI would go here
   return `<h1>Generated Content</h1><p>${prompt}</p>`;
 }
 
