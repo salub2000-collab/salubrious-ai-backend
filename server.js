@@ -2,19 +2,24 @@ const express = require("express");
 const sqlite3 = require("sqlite3");
 const { open } = require("sqlite");
 const fetch = require("node-fetch");
+const cors = require("cors");
 
 const app = express();
+
+// Middleware
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 let db;
 
 /* =====================================
-   DATABASE INITIALIZATION ✅
+    DATABASE INITIALIZATION ✅
 ===================================== */
 async function initDb() {
+  // Using ./usage.db ensures it creates the file in your current directory
   db = await open({
-    filename: "/var/data/usage.db",
+    filename: "./usage.db",
     driver: sqlite3.Database
   });
 
@@ -30,21 +35,21 @@ async function initDb() {
 }
 
 /* =====================================
-   HEALTH CHECK ✅ (RENDER REQUIRED)
+    HEALTH CHECK ✅ (RENDER REQUIRED)
 ===================================== */
 app.get("/", (req, res) => {
   res.status(200).send("OK");
 });
 
 /* =====================================
-   VERSION CHECK ✅ (DEPLOY VERIFICATION)
+    VERSION CHECK ✅
 ===================================== */
 app.get("/version", (req, res) => {
   res.send("DEPLOYED VERSION: 3-FREE-LIMIT + JSON LOGIN ACTIVE");
 });
 
 /* =====================================
-   PDF GENERATION ✅
+    PDF GENERATION ✅
 ===================================== */
 async function generatePDF(html) {
   const response = await fetch(
@@ -65,6 +70,8 @@ async function generatePDF(html) {
   );
 
   if (!response.ok) {
+    const errorText = await response.text();
+    console.error("PDF API Error:", errorText);
     throw new Error("PDF generation failed");
   }
 
@@ -73,14 +80,15 @@ async function generatePDF(html) {
 }
 
 /* =====================================
-   OPENAI GENERATOR (PLACEHOLDER)
+    OPENAI GENERATOR (PLACEHOLDER)
 ===================================== */
 async function generateWithOpenAI(prompt) {
+  // Logic for OpenAI would go here
   return `<h1>Generated Content</h1><p>${prompt}</p>`;
 }
 
 /* =====================================
-   MAIN GENERATION ENDPOINT ✅
+    MAIN GENERATION ENDPOINT ✅
 ===================================== */
 app.post("/generate", async (req, res) => {
   try {
@@ -95,7 +103,6 @@ app.post("/generate", async (req, res) => {
       email
     );
 
-    // First-time user
     if (!user) {
       await db.run(
         "INSERT INTO usage (email, count, paid) VALUES (?, 0, 0)",
@@ -104,12 +111,10 @@ app.post("/generate", async (req, res) => {
       user = { count: 0, paid: 0 };
     }
 
-    // Enforce free limit
     if (!user.paid && user.count >= 3) {
       return res.status(402).json({ error: "FREE_LIMIT_REACHED" });
     }
 
-    // Increment usage
     await db.run(
       "UPDATE usage SET count = count + 1 WHERE email = ?",
       email
@@ -142,7 +147,7 @@ app.post("/generate", async (req, res) => {
 });
 
 /* =====================================
-   EMAIL GENERATOR LOGIN ✅ (JSON ONLY)
+    EMAIL GENERATOR LOGIN ✅
 ===================================== */
 app.post("/email-login", async (req, res) => {
   try {
@@ -157,7 +162,6 @@ app.post("/email-login", async (req, res) => {
       email
     );
 
-    // New user
     if (!user) {
       await db.run(
         "INSERT INTO usage (email, count, paid) VALUES (?, 0, 0)",
@@ -166,17 +170,10 @@ app.post("/email-login", async (req, res) => {
       return res.json({ redirect: "/generator" });
     }
 
-    // Paid user
-    if (user.paid === 1) {
+    if (user.paid === 1 || user.count < 3) {
       return res.json({ redirect: "/generator" });
     }
 
-    // Free user under limit
-    if (user.count < 3) {
-      return res.json({ redirect: "/generator" });
-    }
-
-    // Free limit reached
     return res.json({ redirect: "/used" });
 
   } catch (err) {
@@ -186,7 +183,7 @@ app.post("/email-login", async (req, res) => {
 });
 
 /* =====================================
-   ACTIVATE PAID USER ✅
+    ACTIVATE PAID USER ✅
 ===================================== */
 app.post("/activate-paid", async (req, res) => {
   try {
@@ -222,7 +219,7 @@ app.post("/activate-paid", async (req, res) => {
 });
 
 /* =====================================
-   SERVER BOOTSTRAP ✅
+    SERVER BOOTSTRAP ✅
 ===================================== */
 const PORT = process.env.PORT || 3000;
 
