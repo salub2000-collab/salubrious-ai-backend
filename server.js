@@ -38,7 +38,7 @@ app.get("/", (req, res) => {
 // Version Check
 // =======================
 app.get("/version", (req, res) => {
-  res.send("DEPLOYED VERSION: PUBLIC / NO LOGIN");
+  res.send("DEPLOYED VERSION: PUBLIC / NO LOGIN / FRONTEND MATCH");
 });
 
 // =======================
@@ -80,15 +80,31 @@ async function generateWithOpenAI(prompt) {
 }
 
 // =======================
-// MAIN GENERATION ENDPOINT (PUBLIC ✅)
+// MAIN GENERATION ENDPOINT ✅
 // =======================
 app.post("/generate", async (req, res) => {
   try {
-    const { prompt } = req.body;
+    const {
+      grade,
+      resource_type,
+      subject,
+      topic,
+      standard,
+      length,
+      scope,
+      output_type
+    } = req.body;
 
-    if (!prompt) {
-      return res.status(400).json({ error: "PROMPT_REQUIRED" });
-    }
+    const prompt = `
+Create a ${resource_type}.
+Grade level: ${grade}
+Subject: ${subject}
+Topic: ${topic}
+Standard: ${standard || "N/A"}
+Length: ${length || "N/A"}
+Scope: ${scope || "N/A"}
+Output type: ${output_type || "N/A"}
+`;
 
     const aiContent = await generateWithOpenAI(prompt);
 
