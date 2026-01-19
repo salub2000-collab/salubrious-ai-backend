@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const fetch = require("node-fetch");
 
 const app = express();
 
@@ -18,11 +19,46 @@ app.get("/", (req, res) => {
 });
 
 // =======================
-// Version Check
+// Version
 // =======================
 app.get("/version", (req, res) => {
-  res.send("DEPLOYED VERSION: PUBLIC / NO LOGIN / NO PDF");
+  res.send("DEPLOYED VERSION: PUBLIC + OPENAI");
 });
+
+// =======================
+// OpenAI Generator
+// =======================
+async function generateWithOpenAI(prompt) {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert K–12 curriculum designer."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      temperature: 0.7
+    })
+  });
+
+  const data = await response.json();
+
+  if (!data.choices) {
+    throw new Error("OpenAI response error");
+  }
+
+  return data.choices[0].message.content;
+}
 
 // =======================
 // MAIN GENERATION ENDPOINT ✅
@@ -40,26 +76,28 @@ app.post("/generate", async (req, res) => {
       output_type
     } = req.body;
 
-    // ✅ Build prompt from frontend fields
-    const output = `
-Generated Resource
+    const prompt = `
+Create a ${resource_type} for Grade ${grade} students.
 
-Grade: ${grade}
-Resource Type: ${resource_type}
 Subject: ${subject}
 Topic: ${topic}
 Standard: ${standard || "N/A"}
 Length: ${length || "N/A"}
 Scope: ${scope || "N/A"}
-Output Type: ${output_type || "N/A"}
+Output type: ${output_type || "Teacher-ready instructional material"}
 
-This is a placeholder response.
-Replace this logic with your AI generator.
+Include:
+- Clear instructions
+- Student-friendly language
+- Examples
+- Practice problems
+- Answer key if appropriate
 `;
 
-    // ✅ Return EXACTLY what frontend expects
+    const aiOutput = await generateWithOpenAI(prompt);
+
     res.json({
-      output
+      output: aiOutput
     });
 
   } catch (err) {
