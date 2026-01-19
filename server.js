@@ -4,53 +4,46 @@ const { open } = require("sqlite");
 const fetch = require("node-fetch");
 const cors = require("cors");
 
-// This was the missing part causing the "express is not defined" error
 const app = express();
 
+// =======================
 // Middleware
+// =======================
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 let db;
 
-/* =====================================
-    DATABASE INITIALIZATION ✅
-===================================== */
+// =======================
+// Database Initialization
+// =======================
 async function initDb() {
   db = await open({
     filename: "./usage.db",
     driver: sqlite3.Database
   });
 
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS usage (
-      email TEXT PRIMARY KEY,
-      count INTEGER DEFAULT 0,
-      paid INTEGER DEFAULT 0
-    );
-  `);
-
-  console.log("✅ Database initialized");
+  console.log("✅ Database initialized (no auth)");
 }
 
-/* =====================================
-    HEALTH CHECK ✅
-===================================== */
+// =======================
+// Health Check
+// =======================
 app.get("/", (req, res) => {
   res.status(200).send("OK");
 });
 
-/* =====================================
-    VERSION CHECK ✅
-===================================== */
+// =======================
+// Version Check
+// =======================
 app.get("/version", (req, res) => {
-  res.send("DEPLOYED VERSION: 3-FREE-LIMIT + JSON LOGIN ACTIVE");
+  res.send("DEPLOYED VERSION: PUBLIC / NO LOGIN");
 });
 
-/* =====================================
-    PDF GENERATION ✅
-===================================== */
+// =======================
+// PDF Generation
+// =======================
 async function generatePDF(html) {
   const response = await fetch(
     "https://renderpdf.io/api/pdfs/render-sync",
@@ -79,45 +72,23 @@ async function generatePDF(html) {
   return data.fileUrl;
 }
 
-/* =====================================
-    OPENAI GENERATOR (PLACEHOLDER)
-===================================== */
+// =======================
+// OpenAI Generator (Placeholder)
+// =======================
 async function generateWithOpenAI(prompt) {
   return `<h1>Generated Content</h1><p>${prompt}</p>`;
 }
 
-/* =====================================
-    MAIN GENERATION ENDPOINT ✅
-===================================== */
+// =======================
+// MAIN GENERATION ENDPOINT (PUBLIC ✅)
+// =======================
 app.post("/generate", async (req, res) => {
   try {
-    const { email, prompt } = req.body;
+    const { prompt } = req.body;
 
-    if (!email) {
-      return res.status(400).json({ error: "EMAIL_REQUIRED" });
+    if (!prompt) {
+      return res.status(400).json({ error: "PROMPT_REQUIRED" });
     }
-
-    let user = await db.get(
-      "SELECT * FROM usage WHERE email = ?",
-      email
-    );
-
-    if (!user) {
-      await db.run(
-        "INSERT INTO usage (email, count, paid) VALUES (?, 0, 0)",
-        email
-      );
-      user = { count: 0, paid: 0 };
-    }
-
-    if (!user.paid && user.count >= 3) {
-      return res.status(402).json({ error: "FREE_LIMIT_REACHED" });
-    }
-
-    await db.run(
-      "UPDATE usage SET count = count + 1 WHERE email = ?",
-      email
-    );
 
     const aiContent = await generateWithOpenAI(prompt);
 
@@ -137,7 +108,11 @@ app.post("/generate", async (req, res) => {
 `;
 
     const pdfUrl = await generatePDF(html);
-    res.json({ html, pdfUrl });
+
+    res.json({
+      html,
+      pdfUrl
+    });
 
   } catch (err) {
     console.error("❌ Generate error:", err);
@@ -145,81 +120,9 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-/* =====================================
-    EMAIL GENERATOR LOGIN ✅
-===================================== */
-app.post("/email-login", async (req, res) => {
-  try {
-    const { email } = req.body;
-
-    if (!email) {
-      return res.json({ redirect: "/email-login-generator/" });
-    }
-
-    let user = await db.get(
-      "SELECT * FROM usage WHERE email = ?",
-      email
-    );
-
-    if (!user) {
-      await db.run(
-        "INSERT INTO usage (email, count, paid) VALUES (?, 0, 0)",
-        email
-      );
-      return res.json({ redirect: "/generator" });
-    }
-
-    if (user.paid === 1 || user.count < 3) {
-      return res.json({ redirect: "/generator" });
-    }
-
-    return res.json({ redirect: "/used" });
-
-  } catch (err) {
-    console.error("❌ Email login error:", err);
-    return res.json({ redirect: "/used" });
-  }
-});
-
-/* =====================================
-    ACTIVATE PAID USER ✅
-===================================== */
-app.post("/activate-paid", async (req, res) => {
-  try {
-    const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ error: "EMAIL_REQUIRED" });
-    }
-
-    const user = await db.get(
-      "SELECT * FROM usage WHERE email = ?",
-      email
-    );
-
-    if (!user) {
-      await db.run(
-        "INSERT INTO usage (email, count, paid) VALUES (?, 0, 1)",
-        email
-      );
-    } else {
-      await db.run(
-        "UPDATE usage SET paid = 1 WHERE email = ?",
-        email
-      );
-    }
-
-    res.json({ success: true });
-
-  } catch (err) {
-    console.error("❌ Activate paid error:", err);
-    res.status(500).json({ error: "SERVER_ERROR" });
-  }
-});
-
-/* =====================================
-    SERVER BOOTSTRAP ✅
-===================================== */
+// =======================
+// Server Bootstrap
+// =======================
 const PORT = process.env.PORT || 3000;
 
 (async () => {
